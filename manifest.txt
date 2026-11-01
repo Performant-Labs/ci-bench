@@ -7,3 +7,5 @@ bin bin/benchmark:run
 bin bin/benchmark:compare
 lib package.json
 lib pin.env
+lib lib/common.sh
+lib lib/preflight.sh

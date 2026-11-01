@@ -1,4 +1,37 @@
 #!/usr/bin/env bash
-# benchmark:preflight - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
-echo "benchmark:preflight is not implemented yet" >&2
-exit 2
+# benchmark:preflight [--for init] [--issue <n-or-url>]
+# Prove that benchmark:init-run or benchmark:run can finish, before they start.
+# Prints one line per check, keeps going after a failure, exits 1 if any check failed.
+set -uo pipefail
+
+CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
+# shellcheck source=lib/common.sh
+. "$CI_BENCH_HOME/lib/common.sh"
+# shellcheck source=lib/preflight.sh
+. "$CI_BENCH_HOME/lib/preflight.sh"
+
+set_name=run
+PF_ISSUE=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --for) set_name="${2:-}"; shift 2 || { echo "benchmark:preflight: --for needs a value" >&2; exit 2; } ;;
+    --issue) PF_ISSUE="${2:-}"; shift 2 || { echo "benchmark:preflight: --issue needs a value" >&2; exit 2; } ;;
+    -h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "benchmark:preflight: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+
+case "$set_name" in
+  init) mapfile -t checks < <(pf_init_checks | tr ' ' '\n') ;;
+  run) mapfile -t checks < <(pf_run_checks | tr ' ' '\n') ;;
+  *) echo "benchmark:preflight: --for must be 'init' (omit it for the full run set)" >&2; exit 2 ;;
+esac
+if [ -n "$PF_ISSUE" ]; then checks+=(check_issue); fi
+
+pf_warn_labels
+if pf_run "${checks[@]}"; then
+  pf_report "preflight passed (${#checks[@]} checks)"
+else
+  pf_report "preflight failed: $PF_FAILURES of ${#checks[@]} checks"
+  exit 1
+fi
