@@ -4,7 +4,7 @@ Coordinator for benchmarking a Linux VPS as a GitHub Actions / CI host.
 
 It installs the tools, runs one pass of four existing benchmarks, and writes one JSON document per machine. A second command prints a side-by-side comparison. The benchmarks themselves stay upstream: sysbench, fio, hyperfine, and Docker.
 
-This repository is the spec and the issue tracker. The commands below are the interface. They are not implemented yet.
+This repository is the spec and the issue tracker. The commands below are the interface. They are not implemented yet. The work is [epic #1](https://github.com/Performant-Labs/ci-bench/issues/1).
 
 ## Install
 
