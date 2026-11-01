@@ -1,0 +1,10 @@
+{
+  "name": "ci-bench",
+  "private": true,
+  "type": "module",
+  "description": "GitHub client dependencies for the ci-bench coordinator",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@octokit/rest": "21.1.1"
+  }
+}

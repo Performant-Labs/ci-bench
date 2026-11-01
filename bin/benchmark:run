@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# benchmark:run - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
+echo "benchmark:run is not implemented yet" >&2
+exit 2
