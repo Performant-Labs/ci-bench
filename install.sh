@@ -3,9 +3,7 @@
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Performant-Labs/ci-bench/main/install.sh)"
 #
 # Environment overrides (for testing and forks):
-#   CI_BENCH_REF   git ref to install from (default: main)
 #   CI_BENCH_SRC   local checkout to install from instead of downloading
-#   CI_BENCH_REPO  owner/name to download from (default: Performant-Labs/ci-bench)
 #   CI_BENCH_OS_RELEASE  os-release file to read (tests only)
 
 # The first action is sudo. Nothing runs before this line: no OS probe, no download, no disk.
@@ -20,10 +18,8 @@ set -euo pipefail
 BIN_DIR=/usr/local/bin
 LIB_DIR=/usr/local/lib/ci-bench
 NODE_MIN_MAJOR=18
-REPO="${CI_BENCH_REPO:-Performant-Labs/ci-bench}"
-REF="${CI_BENCH_REF:-main}"
 OS_RELEASE="${CI_BENCH_OS_RELEASE:-/etc/os-release}"
-RAW_BASE="https://raw.githubusercontent.com/${REPO}/${REF}"
+RAW_BASE="https://raw.githubusercontent.com/Performant-Labs/ci-bench/main"
 
 log() { printf 'ci-bench: %s\n' "$*" >&2; }
 die() { log "$*"; exit 1; }
@@ -91,19 +87,12 @@ install_files() {
 install_gh() {
   if command -v gh >/dev/null 2>&1; then return 0; fi
   log "installing the GitHub CLI"
-  if sudo -n install -d -m 0755 /etc/apt/keyrings \
-     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-        | sudo -n tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null \
-     && sudo -n chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-     && printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' \
-          "$(dpkg --print-architecture)" \
-        | sudo -n tee /etc/apt/sources.list.d/github-cli.list >/dev/null \
-     && sudo -n apt-get update -qq \
-     && apt_install gh; then
-    return 0
-  fi
-  log "GitHub apt repo unavailable; falling back to the distro gh package"
-  sudo -n rm -f /etc/apt/sources.list.d/github-cli.list
+  sudo -n install -d -m 0755 /etc/apt/keyrings
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    | sudo -n tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  sudo -n chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n' \
+    "$(dpkg --print-architecture)" | sudo -n tee /etc/apt/sources.list.d/github-cli.list >/dev/null
   sudo -n apt-get update -qq
   apt_install gh
 }

@@ -48,6 +48,10 @@
   "docker": {},
   "errors": [
     {
+      "probe": "fio_yabs",
+      "message": "working directory /tmp is tmpfs"
+    },
+    {
       "probe": "fio_ci",
       "message": "working directory /tmp is tmpfs"
     },

@@ -5,7 +5,7 @@ host_hostname() { hostname 2>/dev/null || uname -n; }
 
 host_distro() {
   # shellcheck source=/dev/null
-  ( . "${CI_BENCH_OS_RELEASE:-/etc/os-release}" 2>/dev/null && printf '%s' "${PRETTY_NAME:-${NAME:-unknown}}" ) || printf 'unknown'
+  ( . /etc/os-release 2>/dev/null && printf '%s' "${PRETTY_NAME:-${NAME:-unknown}}" ) || printf 'unknown'
 }
 
 host_virtualization() {

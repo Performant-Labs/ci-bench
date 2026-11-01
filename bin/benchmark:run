@@ -10,12 +10,10 @@ CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
 # shellcheck source=lib/host.sh
 . "$CI_BENCH_HOME/lib/host.sh"
 # Probe libraries each define probe_<name>, which prints the section's JSON and returns
-# non-zero (message on stderr) on failure. Missing libraries are simply not run yet.
+# non-zero (message on stderr) on failure.
 for lib in cpu fio compile docker; do
-  if [ -r "$CI_BENCH_HOME/lib/$lib.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$CI_BENCH_HOME/lib/$lib.sh"
-  fi
+  # shellcheck source=/dev/null
+  . "$CI_BENCH_HOME/lib/$lib.sh" || { echo "benchmark:run: cannot load $CI_BENCH_HOME/lib/$lib.sh (run install.sh)" >&2; exit 1; }
 done
 
 out_path=""
@@ -39,6 +37,7 @@ declare -A section
 run_section() {
   local name="$1" fn="$2" out err_file rc=0
   if ! declare -F "$fn" >/dev/null; then
+    add_error "$name" "probe function $fn is not defined"
     section[$name]='{}'
     return 0
   fi
