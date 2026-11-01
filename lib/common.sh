@@ -30,3 +30,31 @@ ci_parse_issue_ref() {
 ci_fio_file_bytes() {
   if [ "$(uname -m)" = x86_64 ]; then echo $((2 * 1024 * 1024 * 1024)); else echo $((512 * 1024 * 1024)); fi
 }
+
+# ci_hyperfine_summary <hyperfine --export-json file>: {median_s, min_s, max_s, runs}.
+# runs counts measured runs only; hyperfine's warmup runs are not in "times".
+ci_hyperfine_summary() {
+  jq -e '.results[0] | {median_s: .median, min_s: .min, max_s: .max, runs: (.times | length)}' "$1" 2>/dev/null \
+    || { echo "could not read hyperfine results from $1" >&2; return 1; }
+}
+
+# ci_source_id: the pinned source as {name, version, sha256}. Reads CI_BENCH_PIN or pin.env.
+ci_source_id() {
+  local pin="${CI_BENCH_PIN:-$CI_BENCH_HOME/pin.env}"
+  [ -r "$pin" ] || { echo "cannot read $pin" >&2; return 1; }
+  # shellcheck source=/dev/null
+  ( . "$pin" && jq -n --arg n "$SOURCE_NAME" --arg v "$SOURCE_VERSION" --arg s "$SOURCE_SHA256" '{name: $n, version: $v, sha256: $s}' )
+}
+
+# ci_pinned_tarball: prints the path of the cached pinned tarball after verifying its checksum.
+ci_pinned_tarball() {
+  local pin="${CI_BENCH_PIN:-$CI_BENCH_HOME/pin.env}" file
+  [ -r "$pin" ] || { echo "cannot read $pin" >&2; return 1; }
+  # shellcheck source=/dev/null
+  file="$CI_BENCH_CACHE_DIR/$( . "$pin" && printf '%s' "$SOURCE_FILE" )"
+  [ -f "$file" ] || { echo "$file is missing; run benchmark:install" >&2; return 1; }
+  # shellcheck source=/dev/null
+  [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$( . "$pin" && printf '%s' "$SOURCE_SHA256" )" ] \
+    || { echo "$file does not match the pinned checksum; run benchmark:install" >&2; return 1; }
+  printf '%s' "$file"
+}
