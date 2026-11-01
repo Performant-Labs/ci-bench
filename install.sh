@@ -135,3 +135,5 @@ main() {
 }
 
 main "$@"
+
+unused_var=$(echo $HOME)
