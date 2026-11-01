@@ -1,0 +1,59 @@
+{
+  "schema_version": "1",
+  "started_at": "2026-11-01T20:00:00Z",
+  "finished_at": "2026-11-01T20:24:31Z",
+  "host": {
+    "hostname": "vmi-example",
+    "distro": "Ubuntu 24.04.1 LTS",
+    "kernel": "6.8.0-45-generic",
+    "arch": "x86_64",
+    "virtualization": "kvm",
+    "cpu_model": "AMD EPYC 7282 16-Core Processor",
+    "cores": 4,
+    "ram_bytes": 8334991360,
+    "disk_model": "QEMU HARDDISK",
+    "disk_rotational": false,
+    "cpu_steal_percent": null
+  },
+  "labels": {
+    "provider": "Contabo",
+    "plan": "Core"
+  },
+  "cpu": {
+    "single_thread": {
+      "threads": 1,
+      "events_per_sec": 912.5,
+      "total_time_s": 10.0
+    },
+    "multi_thread": {
+      "threads": 4,
+      "events_per_sec": 3598.2,
+      "total_time_s": 10.0
+    }
+  },
+  "fio_yabs": {},
+  "fio_ci": {},
+  "compile": {
+    "median_s": 41.3,
+    "min_s": 40.9,
+    "max_s": 42.2,
+    "runs": 3,
+    "warmup": 1,
+    "source": {
+      "name": "redis",
+      "version": "7.4.2",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "docker": {},
+  "errors": [
+    {
+      "probe": "fio_ci",
+      "message": "working directory /tmp is tmpfs"
+    },
+    {
+      "probe": "docker",
+      "message": "sudo docker info exited 1"
+    }
+  ]
+}
