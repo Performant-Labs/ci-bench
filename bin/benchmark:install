@@ -148,4 +148,4 @@ start_docker
 install_hyperfine
 fetch_source
 verify_tools
-log "done"
+log "done. Next: benchmark:init-run"
