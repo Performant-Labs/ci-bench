@@ -117,15 +117,7 @@ check_docker() {
 }
 
 check_source_cache() {
-  local pin="${CI_BENCH_PIN:-$CI_BENCH_HOME/pin.env}" file
-  [ -r "$pin" ] || { echo "cannot read $pin"; return 1; }
-  # shellcheck source=/dev/null
-  . "$pin"
-  file="$CI_BENCH_CACHE_DIR/$SOURCE_FILE"
-  [ -f "$file" ] || { echo "$file is missing; run benchmark:install"; return 1; }
-  [ "$(sha256sum "$file" | cut -d' ' -f1)" = "$SOURCE_SHA256" ] \
-    || { echo "$file does not match the pinned checksum; run benchmark:install"; return 1; }
-  echo "$SOURCE_NAME $SOURCE_VERSION"
+  ci_pinned_tarball >/dev/null
 }
 
 # Nearest existing directory at or above the fio directory.

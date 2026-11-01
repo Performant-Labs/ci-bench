@@ -4,7 +4,10 @@ set -uo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
-export CI_BENCH_HOME="$root"
+# shellcheck source=tests/lib-home.sh
+. "$root/tests/lib-home.sh"
+make_home "$work/home" cpu
+export CI_BENCH_HOME="$work/home"
 # shellcheck source=lib/cpu.sh
 . "$root/lib/cpu.sh"
 
