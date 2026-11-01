@@ -39,4 +39,15 @@ CI_BENCH_OS_RELEASE="$work/os-fedora" PATH="$work/fake-bin:$PATH" bash "$root/in
 grep -q 'v1 supports Debian and Ubuntu only' "$work/o3" || fail "fedora: missing v1 message"
 [ "$(cat "$work/sudo.log")" = "$(printf -- '-n true\n-v')" ] || fail "fedora: sudo used before the OS check"
 [ ! -e "$work/violations.log" ] || fail "fedora: unexpected sudo calls"
+# 4. Debian-like, but private repo and no token anywhere: exit 1 with the token message, before any apt call.
+printf 'ID=ubuntu\n' >"$work/os-ubuntu"
+rc=0; : >"$work/sudo.log"
+mkdir -p "$work/notoken-bin"
+for t in bash env dirname mktemp rm cat cp; do ln -sf "$(command -v $t)" "$work/notoken-bin/$t"; done
+ln -sf "$work/fake-bin/sudo" "$work/notoken-bin/sudo"
+env -u GH_TOKEN -u GITHUB_TOKEN CI_BENCH_OS_RELEASE="$work/os-ubuntu" PATH="$work/notoken-bin" bash "$root/install.sh" >"$work/o4" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] || fail "no token: expected exit 1, got $rc"
+grep -q 'private' "$work/o4" || fail "no token: message should say the repository is private: $(cat "$work/o4")"
+grep -q 'GH_TOKEN' "$work/o4" || fail "no token: message should name GH_TOKEN"
+[ "$(cat "$work/sudo.log")" = "$(printf -- '-n true\n-v')" ] || fail "no token: sudo used before the token check"
 echo "installer exit paths: ok"
