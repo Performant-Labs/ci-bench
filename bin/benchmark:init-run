@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
-# benchmark:init-run - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
-echo "benchmark:init-run is not implemented yet" >&2
-exit 2
+# benchmark:init-run
+# Open the GitHub issue for this machine: host details on top, an empty summary table, and a JSON
+# fence for bots. Runs preflight first. Prints the issue number and URL on stdout. Runs no probes.
+set -uo pipefail
+
+CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
+# shellcheck source=lib/common.sh
+. "$CI_BENCH_HOME/lib/common.sh"
+# shellcheck source=lib/host.sh
+. "$CI_BENCH_HOME/lib/host.sh"
+
+case "${1:-}" in
+  '') ;;
+  -h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "benchmark:init-run: unknown argument '$1'" >&2; exit 2 ;;
+esac
+
+ci_preflight --for init || exit 1
+created="$(ci_issue_create)" || { echo "benchmark:init-run: could not create the issue" >&2; exit 1; }
+printf '#%s %s\n' "$(jq -r .number <<<"$created")" "$(jq -r .url <<<"$created")"
