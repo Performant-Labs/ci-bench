@@ -9,3 +9,4 @@ lib package.json
 lib pin.env
 lib lib/common.sh
 lib lib/preflight.sh
+lib lib/host.sh

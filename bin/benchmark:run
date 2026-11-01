@@ -1,4 +1,90 @@
 #!/usr/bin/env bash
-# benchmark:run - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
-echo "benchmark:run is not implemented yet" >&2
-exit 2
+# benchmark:run [-o path]
+# Run the benchmark probes and print one JSON result document on stdout.
+# A short human summary goes to stderr. Exit 1 if any probe recorded an error.
+set -uo pipefail
+
+CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
+# shellcheck source=lib/common.sh
+. "$CI_BENCH_HOME/lib/common.sh"
+# shellcheck source=lib/host.sh
+. "$CI_BENCH_HOME/lib/host.sh"
+# Probe libraries each define probe_<name>, which prints the section's JSON and returns
+# non-zero (message on stderr) on failure. Missing libraries are simply not run yet.
+for lib in cpu fio compile docker; do
+  if [ -r "$CI_BENCH_HOME/lib/$lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CI_BENCH_HOME/lib/$lib.sh"
+  fi
+done
+
+out_path=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) out_path="${2:-}"; [ -n "$out_path" ] || { echo "benchmark:run: -o needs a path" >&2; exit 2; }; shift 2 ;;
+    -h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "benchmark:run: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
+
+now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+errors='[]'
+add_error() { errors="$(jq -c --arg p "$1" --arg m "$2" '. + [{probe: $p, message: $m}]' <<<"$errors")"; }
+
+started_at="$(now)"
+steal0="$(host_steal_sample)"
+
+# run_probe <section> <function> [error probe name]: stores the section JSON in $section_<name>.
+declare -A section
+run_section() {
+  local name="$1" fn="$2" out err_file rc=0
+  if ! declare -F "$fn" >/dev/null; then
+    section[$name]='{}'
+    return 0
+  fi
+  err_file="$(mktemp)"
+  echo "benchmark:run: $name ..." >&2
+  out="$("$fn" 2>"$err_file")" || rc=$?
+  if [ "$rc" -ne 0 ] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<<"$out"; then
+    add_error "$name" "$(tr '\n' ' ' <"$err_file" | sed 's/[[:space:]]*$//' | cut -c1-500)"
+    [ "$rc" -ne 0 ] || add_error "$name" "probe did not produce a JSON object"
+    section[$name]='{}'
+  else
+    section[$name]="$out"
+  fi
+  rm -f "$err_file"
+}
+
+run_section cpu probe_cpu
+run_section fio_yabs probe_fio_yabs
+run_section fio_ci probe_fio_ci
+run_section compile probe_compile
+run_section docker probe_docker
+
+steal1="$(host_steal_sample)"
+finished_at="$(now)"
+steal_pct="$(host_steal_percent "$steal0" "$steal1")"
+
+doc="$(jq -n \
+  --arg started "$started_at" --arg finished "$finished_at" \
+  --argjson host "$(host_json "$steal_pct")" --argjson labels "$(labels_json)" \
+  --argjson cpu "${section[cpu]}" --argjson yabs "${section[fio_yabs]}" --argjson ci "${section[fio_ci]}" \
+  --argjson compile "${section[compile]}" --argjson docker "${section[docker]}" --argjson errors "$errors" \
+  '{schema_version: "1", started_at: $started, finished_at: $finished, host: $host, labels: $labels,
+    cpu: $cpu, fio_yabs: $yabs, fio_ci: $ci, compile: $compile, docker: $docker, errors: $errors}')"
+
+printf '%s\n' "$doc"
+if [ -n "$out_path" ] && ! printf '%s\n' "$doc" >"$out_path"; then
+  echo "benchmark:run: cannot write $out_path" >&2
+  exit 1
+fi
+
+jq -r '
+  def f: if . == null then "—" else tostring end;
+  "ci-bench result: \(.host.hostname) (\(.labels.provider) \(.labels.plan))",
+  "  cores \(.host.cores), RAM \(.host.ram_bytes / 1073741824 | . * 10 | round / 10) GiB, steal \(.host.cpu_steal_percent | f)%",
+  "  cpu 1-thread \(.cpu.single_thread.events_per_sec | f) ev/s, all-core \(.cpu.multi_thread.events_per_sec | f) ev/s",
+  "  compile median \(.compile.median_s | f) s, docker cold median \(.docker.cold.median_s | f) s, cached \(.docker.cached_s | f) s",
+  (.errors[] | "  ERROR \(.probe): \(.message)")' <<<"$doc" >&2
+
+[ "$(jq '.errors | length' <<<"$doc")" -eq 0 ]

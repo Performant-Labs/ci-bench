@@ -1,5 +1,6 @@
 """Validate the checked-in examples against schema/result.schema.json, and check that
-documents missing a required field are rejected. Run: python3 -I tests/validate_schema.py"""
+documents missing a required field are rejected. Extra paths on the command line are
+validated too. Run: python3 -I tests/validate_schema.py [result.json ...]"""
 import copy
 import json
 import pathlib
@@ -18,6 +19,11 @@ for name in ("result-ok.json", "result-failed-probe.json"):
     errs = list(validator.iter_errors(doc))
     if errs:
         failures.append(f"{name} should validate: {errs[0].message}")
+
+for extra_path in sys.argv[1:]:
+    errs = list(validator.iter_errors(json.loads(pathlib.Path(extra_path).read_text())))
+    if errs:
+        failures.append(f"{extra_path} should validate: {errs[0].message} at {list(errs[0].absolute_path)}")
 
 ok = json.loads((root / "examples/result-ok.json").read_text())
 for field in schema["required"]:
