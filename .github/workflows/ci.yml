@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: shellcheck -x install.sh bin/benchmark:* lib/*.sh tests/*.sh
+
+      - name: result examples validate against the schema
+        run: |
+          sudo apt-get install -y --no-install-recommends python3-jsonschema
+          python3 -I tests/validate_schema.py
+
+      # Every test uses fakes for sysbench, fio, hyperfine, Docker, gh and GitHub.
+      # Nothing here installs or runs a benchmark tool.
+      - name: tests
+        run: |
+          set -e
+          for t in tests/*.sh; do
+            [ "$(basename "$t")" = lib-home.sh ] && continue
+            echo "::group::$t"
+            bash "$t"
+            echo "::endgroup::"
+          done
