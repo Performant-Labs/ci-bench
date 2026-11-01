@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Performant-Labs/ci-bench/schema/result.schema.json",
+  "title": "ci-bench result document",
+  "description": "One document per benchmark:run. Unknown extra fields are allowed. A failed probe leaves its metric object empty (or omits the failed members) and adds an entry to errors.",
+  "type": "object",
+  "required": ["schema_version", "started_at", "finished_at", "host", "labels", "cpu", "fio_yabs", "fio_ci", "compile", "docker", "errors"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "started_at": { "$ref": "#/$defs/utc_timestamp" },
+    "finished_at": { "$ref": "#/$defs/utc_timestamp" },
+    "host": {
+      "type": "object",
+      "required": ["hostname", "distro", "kernel", "arch", "virtualization", "cpu_model", "cores", "ram_bytes", "disk_model", "disk_rotational", "cpu_steal_percent"],
+      "properties": {
+        "hostname": { "type": "string" },
+        "distro": { "type": "string" },
+        "kernel": { "type": "string" },
+        "arch": { "type": "string" },
+        "virtualization": { "type": "string", "description": "systemd-detect-virt output, or \"unknown\" when unavailable" },
+        "cpu_model": { "type": "string" },
+        "cores": { "type": "integer", "minimum": 1 },
+        "ram_bytes": { "type": "integer", "minimum": 1 },
+        "disk_model": { "type": ["string", "null"], "description": "lsblk MODEL for the device backing /, null when lsblk reports none" },
+        "disk_rotational": { "type": ["boolean", "null"], "description": "lsblk ROTA for the device backing /, null when unknown" },
+        "cpu_steal_percent": { "type": ["number", "null"], "minimum": 0, "description": "Steal percent over the whole run, null when /proc/stat could not be sampled" }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "required": ["provider", "plan"],
+      "properties": {
+        "provider": { "type": "string", "description": "CI_BENCH_PROVIDER, empty string when unset" },
+        "plan": { "type": "string", "description": "CI_BENCH_PLAN, empty string when unset" }
+      }
+    },
+    "cpu": {
+      "type": "object",
+      "properties": {
+        "single_thread": { "$ref": "#/$defs/sysbench_run" },
+        "multi_thread": { "$ref": "#/$defs/sysbench_run" }
+      }
+    },
+    "fio_yabs": {
+      "type": "object",
+      "properties": {
+        "4k": { "$ref": "#/$defs/fio_result" },
+        "64k": { "$ref": "#/$defs/fio_result" },
+        "512k": { "$ref": "#/$defs/fio_result" },
+        "1m": { "$ref": "#/$defs/fio_result" }
+      }
+    },
+    "fio_ci": { "$ref": "#/$defs/fio_result_or_empty" },
+    "compile": {
+      "type": "object",
+      "properties": {
+        "median_s": { "$ref": "#/$defs/seconds" },
+        "min_s": { "$ref": "#/$defs/seconds" },
+        "max_s": { "$ref": "#/$defs/seconds" },
+        "runs": { "type": "integer", "minimum": 1 },
+        "warmup": { "type": "integer", "minimum": 0 },
+        "source": { "$ref": "#/$defs/source_id" }
+      }
+    },
+    "docker": {
+      "type": "object",
+      "properties": {
+        "cold": {
+          "type": "object",
+          "properties": {
+            "median_s": { "$ref": "#/$defs/seconds" },
+            "min_s": { "$ref": "#/$defs/seconds" },
+            "max_s": { "$ref": "#/$defs/seconds" },
+            "runs": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "cached_s": { "$ref": "#/$defs/seconds" },
+        "image_id": { "type": "string" },
+        "source": { "$ref": "#/$defs/source_id" }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["probe", "message"],
+        "properties": {
+          "probe": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "utc_timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$" },
+    "seconds": { "type": "number", "minimum": 0 },
+    "source_id": {
+      "type": "object",
+      "required": ["name", "version", "sha256"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "sysbench_run": {
+      "type": "object",
+      "required": ["threads", "events_per_sec", "total_time_s"],
+      "properties": {
+        "threads": { "type": "integer", "minimum": 1 },
+        "events_per_sec": { "type": "number", "minimum": 0 },
+        "total_time_s": { "$ref": "#/$defs/seconds" }
+      }
+    },
+    "fio_direction": {
+      "type": "object",
+      "required": ["iops", "bw_bytes_per_sec", "lat_mean_ns", "lat_p99_ns"],
+      "properties": {
+        "iops": { "type": "number", "minimum": 0 },
+        "bw_bytes_per_sec": { "type": "number", "minimum": 0 },
+        "lat_mean_ns": { "type": ["number", "null"], "minimum": 0, "description": "null when fio did not print it" },
+        "lat_p99_ns": { "type": ["number", "null"], "minimum": 0, "description": "null when fio did not print it" }
+      }
+    },
+    "fio_result": {
+      "type": "object",
+      "required": ["read", "write"],
+      "properties": {
+        "read": { "$ref": "#/$defs/fio_direction" },
+        "write": { "$ref": "#/$defs/fio_direction" }
+      }
+    },
+    "fio_result_or_empty": {
+      "type": "object",
+      "properties": {
+        "read": { "$ref": "#/$defs/fio_direction" },
+        "write": { "$ref": "#/$defs/fio_direction" }
+      }
+    }
+  }
+}
