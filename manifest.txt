@@ -15,3 +15,5 @@ lib lib/fio.sh
 lib lib/compile.sh
 lib lib/docker.sh
 lib Dockerfile
+lib lib/render.mjs
+lib lib/issue.mjs

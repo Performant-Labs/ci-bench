@@ -58,3 +58,27 @@ ci_pinned_tarball() {
     || { echo "$file does not match the pinned checksum; run benchmark:install" >&2; return 1; }
   printf '%s' "$file"
 }
+
+# ci_preflight [args]: run the preflight command found on PATH (installed next to the others).
+ci_preflight() {
+  local p
+  p="$(command -v benchmark:preflight)" || { echo "benchmark:preflight is not on PATH; run install.sh" >&2; return 1; }
+  "$p" "$@"
+}
+
+# ci_issue_title: "ci-bench: <provider> <plan> <hostname>", empty segments dropped.
+ci_issue_title() {
+  local parts=("ci-bench:") seg
+  for seg in "${CI_BENCH_PROVIDER:-}" "${CI_BENCH_PLAN:-}" "$1"; do
+    if [ -n "$seg" ]; then parts+=("$seg"); fi
+  done
+  printf '%s' "${parts[*]}"
+}
+
+# ci_issue_create: create the host issue; prints {"number": N, "url": "..."}. Needs lib/host.sh.
+ci_issue_create() {
+  local host input
+  host="$(host_json null)" || return 1
+  input="$(jq -n --argjson host "$host" --argjson labels "$(labels_json)" '{host: $host, labels: $labels}')" || return 1
+  node "$CI_BENCH_HOME/lib/issue.mjs" create --title "$(ci_issue_title "$(jq -r .hostname <<<"$host")")" <<<"$input"
+}

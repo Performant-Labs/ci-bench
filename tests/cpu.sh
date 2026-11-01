@@ -7,7 +7,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # shellcheck source=tests/lib-home.sh
 . "$root/tests/lib-home.sh"
 make_home "$work/home" cpu
-export CI_BENCH_HOME="$work/home"
+export CI_BENCH_HOME="$work/home" STUB_DIR="$work"
+export PATH="$work/home/bin:$PATH"
 # shellcheck source=lib/cpu.sh
 . "$root/lib/cpu.sh"
 
@@ -31,7 +32,7 @@ sed -n 2p "$work/calls" | grep -qx "cpu --cpu-max-prime=20000 --threads=$(nproc)
 jq -e --argjson n "$(nproc)" '.single_thread.threads == 1 and .multi_thread.threads == $n' <<<"$out" >/dev/null || fail "probe JSON wrong: $out"
 
 # A sysbench failure fails the probe, and benchmark:run records an error and still emits a document.
-doc="$(PATH="$work/fake:$PATH" FAKE_FAIL=1 "$root/bin/benchmark:run" 2>/dev/null)"; rc=$?
+doc="$(PATH="$work/fake:$PATH" FAKE_FAIL=1 "$root/bin/benchmark:run" --issue 1 2>/dev/null)"; rc=$?
 [ "$rc" -eq 1 ] || fail "run with failing sysbench should exit 1, got $rc"
 jq -e '.cpu == {} and (.errors | map(.probe) | index("cpu")) != null and (.host.hostname | length > 0)' <<<"$doc" >/dev/null || fail "failed probe should leave cpu {} and an error: $doc"
 echo "cpu: ok"

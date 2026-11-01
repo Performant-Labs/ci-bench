@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# benchmark:run [-o path]
-# Run the benchmark probes and print one JSON result document on stdout.
-# A short human summary goes to stderr. Exit 1 if any probe recorded an error.
+# benchmark:run [--issue <n-or-url>] [-o path]
+# Run preflight, then the benchmark probes, and print one JSON result document on stdout.
+# A short human summary goes to stderr. The run is added to a host issue as a comment and a
+# summary-table row; --issue names it, otherwise you are asked "Create a new issue?".
+# Exit 1 if preflight fails, no issue is chosen, any probe recorded an error, or the issue update fails.
 set -uo pipefail
 
 CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
@@ -17,13 +19,38 @@ for lib in cpu fio compile docker; do
 done
 
 out_path=""
+issue_ref=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --issue) issue_ref="${2:-}"; [ -n "$issue_ref" ] || { echo "benchmark:run: --issue needs a number or URL" >&2; exit 2; }; shift 2 ;;
     -o) out_path="${2:-}"; [ -n "$out_path" ] || { echo "benchmark:run: -o needs a path" >&2; exit 2; }; shift 2 ;;
     -h|--help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "benchmark:run: unknown argument '$1'" >&2; exit 2 ;;
   esac
 done
+
+# Preflight first: nothing below runs (no prompt, no issue write, no probe) unless it passes.
+if [ -n "$issue_ref" ]; then
+  issue_number="$(ci_parse_issue_ref "$issue_ref")" || { echo "benchmark:run: '$issue_ref' is not an issue number or an issue URL of $(ci_repo)" >&2; exit 1; }
+  ci_preflight --issue "$issue_ref" || exit 1
+else
+  ci_preflight || exit 1
+  no_issue_msg="benchmark:run: no issue selected. Re-run with --issue <n>, or run benchmark:init-run first."
+  if [ -t 0 ] && [ -t 2 ]; then
+    printf 'Create a new issue? ' >&2
+    read -r answer || answer=""
+    case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
+      y|yes) ;;
+      *) echo "$no_issue_msg" >&2; exit 1 ;;
+    esac
+    created="$(ci_issue_create)" || { echo "benchmark:run: could not create the issue" >&2; exit 1; }
+    issue_number="$(jq -r .number <<<"$created")"
+    echo "benchmark:run: opened issue #$issue_number $(jq -r .url <<<"$created")" >&2
+  else
+    echo "$no_issue_msg" >&2
+    exit 1
+  fi
+fi
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 errors='[]'
@@ -78,12 +105,18 @@ if [ -n "$out_path" ] && ! printf '%s\n' "$doc" >"$out_path"; then
   exit 1
 fi
 
+issue_failed=0
+if ! node "$CI_BENCH_HOME/lib/issue.mjs" append --issue "$issue_number" <<<"$doc"; then
+  echo "benchmark:run: could not update issue #$issue_number" >&2
+  issue_failed=1
+fi
+
 jq -r '
-  def f: if . == null then "—" else tostring end;
+  def f: if . == null then "—" elif type == "number" then (. * 100 | round / 100 | tostring) else tostring end;
   "ci-bench result: \(.host.hostname) (\(.labels.provider) \(.labels.plan))",
   "  cores \(.host.cores), RAM \(.host.ram_bytes / 1073741824 | . * 10 | round / 10) GiB, steal \(.host.cpu_steal_percent | f)%",
   "  cpu 1-thread \(.cpu.single_thread.events_per_sec | f) ev/s, all-core \(.cpu.multi_thread.events_per_sec | f) ev/s",
   "  compile median \(.compile.median_s | f) s, docker cold median \(.docker.cold.median_s | f) s, cached \(.docker.cached_s | f) s",
   (.errors[] | "  ERROR \(.probe): \(.message)")' <<<"$doc" >&2
 
-[ "$(jq '.errors | length' <<<"$doc")" -eq 0 ]
+[ "$issue_failed" -eq 0 ] && [ "$(jq '.errors | length' <<<"$doc")" -eq 0 ]

@@ -8,7 +8,8 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # shellcheck source=tests/lib-home.sh
 . "$root/tests/lib-home.sh"
 make_home "$work/home" fio
-export CI_BENCH_HOME="$work/home"
+export CI_BENCH_HOME="$work/home" STUB_DIR="$work"
+export PATH="$work/home/bin:$PATH"
 # shellcheck source=lib/common.sh
 . "$root/lib/common.sh"
 # shellcheck source=lib/fio.sh
@@ -83,7 +84,7 @@ grep -q 'boom' "$work/err" || fail "fio error text missing"
 [ -z "$(ls -A "$work/fiodir")" ] || fail "failed run left files behind"
 
 # --- through benchmark:run: errors recorded, JSON still emitted
-doc="$(FAKE_FSTYPE=tmpfs "$root/bin/benchmark:run" 2>/dev/null)"; rc=$?
+doc="$(FAKE_FSTYPE=tmpfs "$root/bin/benchmark:run" --issue 1 2>/dev/null)"; rc=$?
 [ "$rc" -eq 1 ] || fail "run on tmpfs should exit 1, got $rc"
 jq -e '.fio_yabs == {} and .fio_ci == {} and ([.errors[].probe] | index("fio_yabs")) != null and ([.errors[].probe] | index("fio_ci")) != null' <<<"$doc" >/dev/null || fail "tmpfs run doc: $doc"
 echo "fio: ok"
