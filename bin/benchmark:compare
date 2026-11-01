@@ -1,4 +1,77 @@
 #!/usr/bin/env bash
-# benchmark:compare - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
-echo "benchmark:compare is not implemented yet" >&2
-exit 2
+# benchmark:compare a.json b.json [c.json ...]
+# Print a side-by-side plain-text table of ci-bench result documents.
+# Exit 0 on success; exit 2 on a usage error, an unreadable file, a missing
+# required field, or a schema_version this command does not know.
+set -euo pipefail
+
+KNOWN_SCHEMA_VERSIONS=("1")
+REQUIRED_TOP=(schema_version started_at finished_at host labels cpu fio_yabs fio_ci compile docker errors)
+
+die() { echo "benchmark:compare: $*" >&2; exit 2; }
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: benchmark:compare a.json b.json [c.json ...]" >&2
+  exit 2
+fi
+command -v jq >/dev/null 2>&1 || die "jq is required (run benchmark:install)"
+
+required_json="$(printf '%s\n' "${REQUIRED_TOP[@]}" | jq -R . | jq -sc .)"
+for f in "$@"; do
+  [ -r "$f" ] || die "cannot read $f"
+  jq -e 'type == "object"' "$f" >/dev/null 2>&1 || die "$f is not a JSON object"
+  version="$(jq -r '.schema_version // "" | tostring' "$f")"
+  known=0
+  for v in "${KNOWN_SCHEMA_VERSIONS[@]}"; do
+    if [ "$version" = "$v" ]; then known=1; fi
+  done
+  [ "$known" -eq 1 ] || die "$f has unknown schema_version '${version}' (known: ${KNOWN_SCHEMA_VERSIONS[*]})"
+  missing="$(jq -r --argjson req "$required_json" '. as $d | [$req[] as $k | select($d | has($k) | not) | $k] | join(", ")' "$f")"
+  [ -z "$missing" ] || die "$f is missing required fields: $missing"
+done
+
+jq -rs '
+  def dash: "—";
+  def r1: (. * 10 | round) as $n | (($n / 10 | floor) | tostring) + "." + (($n % 10) | tostring);
+  def r0: round | tostring;
+  def num(f): if . == null then dash else (try f catch dash) end;
+  def sec: num(r1 + " s");
+  def iops: num(r0);
+  def mbs: num(. / 1000000 | r1 + " MB/s");
+  def spaces(n): [range(0; n) | " "] | join("");
+  def dashes(n): [range(0; n) | "-"] | join("");
+  def padr(n): . + spaces(n - length);
+  def padl(n): spaces(n - length) + .;
+
+  . as $docs
+  | def row(lbl; f): [lbl] + [ $docs[] | f ];
+    [ $docs[]
+      | ([.labels.provider, .labels.plan] | map(select(. != null and . != "")) | join(" / "))
+        as $name
+      | if $name == "" then (.host.hostname // dash) else $name end ] as $headers
+  | ( [
+        row("cores"; .host.cores | num(tostring)),
+        row("RAM"; .host.ram_bytes | num(. / 1073741824 | r1 + " GiB")),
+        row("root disk rotational"; .host.disk_rotational | if . == null then dash elif . then "yes" else "no" end),
+        row("CPU steal"; .host.cpu_steal_percent | num(r1 + " %")),
+        row("sysbench 1-thread events/s"; .cpu.single_thread.events_per_sec | num(r1)),
+        row("sysbench all-core events/s"; .cpu.multi_thread.events_per_sec | num(r1))
+      ]
+      + [ ("4k", "64k", "512k", "1m") as $bs | ("read", "write") as $dir
+          | row("fio YABS " + $bs + " " + $dir + " IOPS"; .fio_yabs[$bs][$dir].iops | iops),
+            row("fio YABS " + $bs + " " + $dir + " bandwidth"; .fio_yabs[$bs][$dir].bw_bytes_per_sec | mbs) ]
+      + [ ("read", "write") as $dir
+          | row("fio CI 16k " + $dir + " IOPS"; .fio_ci[$dir].iops | iops),
+            row("fio CI 16k " + $dir + " bandwidth"; .fio_ci[$dir].bw_bytes_per_sec | mbs) ]
+      + [
+        row("compile median"; .compile.median_s | sec),
+        row("Docker cold median"; .docker.cold.median_s | sec),
+        row("Docker cached rebuild"; .docker.cached_s | sec)
+      ] ) as $body
+  | ([["host"] + $headers] + $body) as $table
+  | ([range(0; $table[0] | length)] | map(. as $i | [$table[] | .[$i] | length] | max)) as $w
+  | ( $table[]
+      | [ to_entries[] | . as $e | if $e.key == 0 then ($e.value | padr($w[0])) else ($e.value | padl($w[$e.key])) end ]
+      | join("  ") ) as $line
+  | $line, empty
+' "$@" | awk 'NR==1 { print; n = length($0); s = ""; for (i = 0; i < n; i++) s = s "-"; print s; next } { print }'
