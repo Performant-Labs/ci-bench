@@ -1,4 +1,151 @@
 #!/usr/bin/env bash
-# benchmark:install - not implemented yet. See https://github.com/Performant-Labs/ci-bench/issues/1
-echo "benchmark:install is not implemented yet" >&2
-exit 2
+# benchmark:install - install the benchmark tools and the pinned compile source.
+# Debian and Ubuntu. Idempotent. Needs sudo; reuses the credential install.sh primed.
+set -euo pipefail
+
+CI_BENCH_HOME="${CI_BENCH_HOME:-/usr/local/lib/ci-bench}"
+CACHE_DIR="${CI_BENCH_CACHE_DIR:-/var/lib/ci-bench/src}"
+
+log() { printf 'benchmark:install: %s\n' "$*" >&2; }
+die() { log "$*"; exit 1; }
+
+PIN_FILE="${CI_BENCH_PIN:-$CI_BENCH_HOME/pin.env}"
+[ -r "$PIN_FILE" ] || die "cannot read $PIN_FILE (run install.sh first)"
+# shellcheck source=/dev/null
+. "$PIN_FILE"
+
+# Reuse the sudo credential. One -v attempt, then never prompt again.
+if ! sudo -n true 2>/dev/null; then
+  sudo -v || die "sudo is required"
+fi
+
+# shellcheck source=/dev/null
+distro_id() { . /etc/os-release && printf '%s' "${ID:-}"; }
+# shellcheck source=/dev/null
+distro_like() { . /etc/os-release && printf '%s' "${ID_LIKE:-}"; }
+# shellcheck source=/dev/null
+codename() { . /etc/os-release && printf '%s' "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"; }
+
+apt_get() { sudo -n env DEBIAN_FRONTEND=noninteractive apt-get "$@"; }
+apt_install() { apt_get install -y --no-install-recommends "$@"; }
+have_candidate() { # have_candidate <package>
+  local c
+  c="$(apt-cache policy "$1" 2>/dev/null | sed -n 's/^ *Candidate: //p')"
+  [ -n "$c" ] && [ "$c" != "(none)" ]
+}
+
+install_base_packages() {
+  log "installing sysbench, fio, build-essential and helpers"
+  apt_get update -qq
+  apt_install sysbench fio build-essential ca-certificates curl tar jq
+}
+
+docker_repo_distro() {
+  case " $(distro_id) $(distro_like) " in
+    *" ubuntu "*) echo ubuntu ;;
+    *) echo debian ;;
+  esac
+}
+
+install_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    log "docker already installed"
+    return 0
+  fi
+  local dist code arch
+  dist="$(docker_repo_distro)"; code="$(codename)"; arch="$(dpkg --print-architecture)"
+  log "adding Docker's apt repo (${dist} ${code})"
+  if [ -n "$code" ] \
+     && sudo -n install -d -m 0755 /etc/apt/keyrings \
+     && curl -fsSL "https://download.docker.com/linux/${dist}/gpg" | sudo -n tee /etc/apt/keyrings/docker.asc >/dev/null \
+     && sudo -n chmod a+r /etc/apt/keyrings/docker.asc \
+     && printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\n' \
+          "$arch" "$dist" "$code" | sudo -n tee /etc/apt/sources.list.d/docker.list >/dev/null \
+     && apt_get update -qq \
+     && have_candidate docker-ce \
+     && apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin; then
+    return 0
+  fi
+  log "Docker's apt repo cannot be used here; falling back to docker.io"
+  sudo -n rm -f /etc/apt/sources.list.d/docker.list
+  apt_get update -qq
+  apt_install docker.io
+}
+
+start_docker() {
+  sudo -n systemctl enable --now docker >/dev/null 2>&1 \
+    || sudo -n service docker start >/dev/null 2>&1 \
+    || die "could not start the Docker service"
+  local user="${SUDO_USER:-${USER:-}}"
+  if [ -n "$user" ] && [ "$user" != root ] && id "$user" >/dev/null 2>&1; then
+    sudo -n usermod -aG docker "$user"
+    log "added $user to the docker group (benchmark:run uses sudo docker, so no re-login is needed)"
+  fi
+}
+
+install_hyperfine() {
+  if command -v hyperfine >/dev/null 2>&1; then
+    log "hyperfine already installed"
+    return 0
+  fi
+  if have_candidate hyperfine; then
+    apt_install hyperfine
+    return 0
+  fi
+  local arch want tmp
+  arch="$(dpkg --print-architecture)"
+  case "$arch" in
+    amd64) want="$HYPERFINE_SHA256_AMD64" ;;
+    arm64) want="$HYPERFINE_SHA256_ARM64" ;;
+    *) die "no hyperfine package for $arch" ;;
+  esac
+  tmp="$(mktemp -d)"
+  log "installing hyperfine ${HYPERFINE_VERSION} from the upstream release"
+  curl -fsSL -o "$tmp/hyperfine.deb" \
+    "https://github.com/sharkdp/hyperfine/releases/download/v${HYPERFINE_VERSION}/hyperfine_${HYPERFINE_VERSION}_${arch}.deb"
+  if [ "$(sha256sum "$tmp/hyperfine.deb" | cut -d' ' -f1)" != "$want" ]; then
+    rm -rf "$tmp"; die "hyperfine .deb checksum mismatch"
+  fi
+  sudo -n dpkg -i "$tmp/hyperfine.deb" >/dev/null
+  rm -rf "$tmp"
+}
+
+sha_ok() { [ -f "$1" ] && [ "$(sha256sum "$1" | cut -d' ' -f1)" = "$SOURCE_SHA256" ]; }
+
+fetch_source() {
+  local dest="$CACHE_DIR/$SOURCE_FILE"
+  sudo -n install -d -m 0755 "$CACHE_DIR"
+  if sha_ok "$dest"; then
+    log "$SOURCE_FILE already cached with a matching checksum"
+    return 0
+  fi
+  log "downloading $SOURCE_FILE"
+  local tmp
+  tmp="$(mktemp)"
+  curl -fsSL -o "$tmp" "$SOURCE_URL"
+  if ! sha_ok "$tmp"; then
+    rm -f "$tmp"; die "$SOURCE_FILE checksum does not match the pin in $PIN_FILE"
+  fi
+  sudo -n install -m 0644 "$tmp" "$dest"
+  rm -f "$tmp"
+}
+
+verify_tools() {
+  log "verifying tools"
+  local failed=0 cmd
+  for cmd in "sysbench --version" "fio --version" "gcc --version" "hyperfine --version" "sudo -n docker info"; do
+    if ! $cmd >/dev/null 2>&1; then
+      log "FAILED: $cmd"; failed=1
+    fi
+  done
+  sha_ok "$CACHE_DIR/$SOURCE_FILE" || { log "FAILED: pinned tarball checksum"; failed=1; }
+  [ "$failed" -eq 0 ] || exit 1
+}
+
+install_base_packages
+install_docker
+start_docker
+install_hyperfine
+fetch_source
+verify_tools
+log "done"
