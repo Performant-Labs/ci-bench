@@ -13,3 +13,5 @@ lib lib/host.sh
 lib lib/cpu.sh
 lib lib/fio.sh
 lib lib/compile.sh
+lib lib/docker.sh
+lib Dockerfile
