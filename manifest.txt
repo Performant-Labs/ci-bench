@@ -6,3 +6,4 @@ bin bin/benchmark:install
 bin bin/benchmark:run
 bin bin/benchmark:compare
 lib package.json
+lib pin.env
