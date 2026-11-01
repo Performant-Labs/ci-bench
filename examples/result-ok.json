@@ -115,20 +115,5 @@
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "docker": {
-    "cold": {
-      "median_s": 88.7,
-      "min_s": 86.1,
-      "max_s": 91.4,
-      "runs": 3
-    },
-    "cached_s": 3.2,
-    "image_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "source": {
-      "name": "redis",
-      "version": "7.4.2",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
-    }
-  },
   "errors": []
 }
