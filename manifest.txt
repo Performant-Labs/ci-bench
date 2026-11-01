@@ -1,0 +1,8 @@
+# Files install.sh copies. Format: <kind> <path>
+# bin = /usr/local/bin (mode 0755); lib = /usr/local/lib/ci-bench (mode 0644, 0755 for .sh)
+bin bin/benchmark:preflight
+bin bin/benchmark:init-run
+bin bin/benchmark:install
+bin bin/benchmark:run
+bin bin/benchmark:compare
+lib package.json
