@@ -9,7 +9,8 @@
 #   CI_BENCH_OS_RELEASE  os-release file to read (tests only)
 
 # The first action is sudo. Nothing runs before this line: no OS probe, no download, no disk.
-if ! command -v sudo >/dev/null 2>&1 || ! sudo -v; then
+# Passwordless sudo is accepted as is: sudo-rs refuses `sudo -v` without a terminal even then.
+if ! command -v sudo >/dev/null 2>&1 || ! { sudo -n true 2>/dev/null || sudo -v; }; then
   echo "ci-bench: sudo is required and must succeed; run this as a user with sudo." >&2
   exit 1
 fi
