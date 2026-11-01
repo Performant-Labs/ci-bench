@@ -18,11 +18,12 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/Performant-Labs/ci-bench
 
 | Command | Role |
 |---|---|
+| `benchmark:init-run` | Open a GitHub issue for this machine. Human details on top, a JSON fence under them for bots. |
 | `benchmark:install` | Install sysbench, fio, build-essential, Docker, and hyperfine. Start Docker. |
-| `benchmark:run` | Record host facts, then run CPU, both fio profiles, a pinned compile, and a Docker build. Print one JSON document. |
+| `benchmark:run` | Run the probes. Requires `--issue <n>`, or answers `y` to `Create a new issue?`. Each run comments and updates the summary table in the issue body. |
 | `benchmark:compare` | Read two or more result files and print a side-by-side table. |
 
-`benchmark:run` invokes `sudo docker` so a docker-group membership that is not active in the current shell cannot stall the run.
+`benchmark:run` invokes `sudo docker` so a docker-group membership that is not active in the current shell cannot stall the run. Opening and updating issues uses `@octokit/rest` with `GITHUB_TOKEN` or `GH_TOKEN`.
 
 ## Status
 
