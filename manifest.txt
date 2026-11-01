@@ -11,3 +11,4 @@ lib lib/common.sh
 lib lib/preflight.sh
 lib lib/host.sh
 lib lib/cpu.sh
+lib lib/fio.sh
