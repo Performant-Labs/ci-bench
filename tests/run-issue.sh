@@ -81,6 +81,11 @@ out="$(CI_BENCH_PROVIDER=Contabo CI_BENCH_PLAN="" "$init" 2>/dev/null)"; rc=$?
 title="$(sed -n 2p "$work/issue-create.args")"
 [ "$title" = "ci-bench: Contabo $(hostname)" ] || fail "title with empty plan: '$title'"
 jq -e '.host.hostname != null and .labels.provider == "Contabo" and .labels.plan == ""' "$work/issue-create.json" >/dev/null || fail "create input: $(cat "$work/issue-create.json")"
+# The next step is printed as an exact command, on stderr, so stdout stays "#N URL".
+hint="$(CI_BENCH_PROVIDER=Contabo "$init" 2>&1 >/dev/null)"
+case "$hint" in *"    benchmark:run --issue 77"*) ;; *) fail "init-run should print the exact next command: $hint" ;; esac
+hint="$(CI_BENCH_REPO=me/fork "$init" 2>&1 >/dev/null)"
+case "$hint" in *"    CI_BENCH_REPO=me/fork benchmark:run --issue 77"*) ;; *) fail "the hint should carry CI_BENCH_REPO when it is set: $hint" ;; esac
 reset
 FAKE_PREFLIGHT_RC=1 "$init" >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 1 ] || fail "init-run with failing preflight: expected exit 1, got $rc"

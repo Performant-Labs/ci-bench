@@ -131,7 +131,7 @@ main() {
   install_node
   install_files
   install_octokit
-  log "done. Next: gh auth login, then benchmark:preflight"
+  log "done. Next: gh auth login, then benchmark:preflight --for init, then benchmark:install"
 }
 
 main "$@"

@@ -32,7 +32,8 @@ benchmark:install
 export CI_BENCH_PROVIDER=Contabo
 export CI_BENCH_PLAN=Core
 
-# 6. Open the issue for this machine. It prints the issue number and URL.
+# 6. Open the issue for this machine. It prints the issue number and URL, then the exact
+#    `benchmark:run --issue <n>` command to run next.
 benchmark:init-run
 
 # 7. Run the benchmarks and add the result to that issue.

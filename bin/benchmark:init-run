@@ -18,4 +18,12 @@ esac
 
 ci_preflight --for init || exit 1
 created="$(ci_issue_create)" || { echo "benchmark:init-run: could not create the issue" >&2; exit 1; }
-printf '#%s %s\n' "$(jq -r .number <<<"$created")" "$(jq -r .url <<<"$created")"
+number="$(jq -r .number <<<"$created")"
+printf '#%s %s\n' "$number" "$(jq -r .url <<<"$created")"
+# The next step, as a command to copy. The hint goes to stderr so stdout stays "#N URL".
+{
+  echo
+  echo "Next, run the benchmarks and add the result to this issue:"
+  echo
+  echo "    ${CI_BENCH_REPO:+CI_BENCH_REPO=$CI_BENCH_REPO }benchmark:run --issue $number"
+} >&2
