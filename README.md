@@ -54,7 +54,7 @@ Both `benchmark:init-run` and `benchmark:run` run preflight first and stop befor
 | `benchmark:run [--issue n] [-o file]` | Run the benchmarks. JSON goes to stdout, a short summary to stderr, `-o` also writes the JSON to a file. Exit 1 if any probe failed. |
 | `benchmark:compare a.json b.json [...]` | Print a side-by-side table of two or more result files. |
 
-Set `CI_BENCH_REPO=owner/name` to keep the issues in a fork instead of `Performant-Labs/ci-bench`.
+Host issues go to this repository (`Performant-Labs/ci-bench`) by default, and **this repository is public**: a host issue shows the hostname, kernel, CPU and the full run JSON to anyone. To keep results private, create a private repository with issues enabled and set `CI_BENCH_REPO=owner/name` before `benchmark:init-run`.
 
 ## What the numbers mean
 
