@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { boise, renderBody, renderComment, parseBody, updateBody, summaryTable } from "../lib/render.mjs";
+import { boise, duration, renderBody, renderComment, parseBody, updateBody, summaryTable } from "../lib/render.mjs";
 import { createHostIssue, appendRun, splitRepo, HOST_LABEL } from "../lib/issue.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,6 +32,14 @@ test("boise labels MST in winter and MDT in summer", () => {
   assert.equal(boise("2026-07-01T20:00:00Z"), "2026-07-01 14:00 MDT");
 });
 
+test("duration comes from started_at and finished_at", () => {
+  assert.equal(duration({ started_at: "2026-11-01T22:04:52Z", finished_at: "2026-11-01T22:12:56Z" }), "8m 04s");
+  assert.equal(duration({ started_at: "2026-11-01T22:00:00Z", finished_at: "2026-11-01T22:00:09Z" }), "0m 09s");
+  assert.equal(duration({ started_at: "2026-11-01T22:00:00Z", finished_at: "2026-11-01T23:02:30Z" }), "1h 02m");
+  assert.equal(duration({ started_at: "2026-11-01T22:00:00Z" }), "—");
+  assert.equal(duration({ started_at: "2026-11-01T23:00:00Z", finished_at: "2026-11-01T22:00:00Z" }), "—");
+});
+
 test("body from two run documents, one with failed probes", () => {
   const body = renderBody(hostDoc([ok, failed]), ok.labels);
   const doc = fenceOf(body);
@@ -41,6 +49,8 @@ test("body from two run documents, one with failed probes", () => {
   const r = rows(body);
   assert.equal(r.length, 2);
   assert.match(r[0], /21000 \/ 21000/);
+  assert.match(r[0], /MST \| 24m 31s \|/);   // 20:00:00Z to 20:24:31Z
+  assert.match(r[1], /MST \| 9m 42s \|/);    // 21:10:00Z to 21:19:42Z
   assert.match(r[0], /MST/);
   assert.match(r[1], /— \| — \| 41\.3 s \| — \| —/);   // failed fio rows and docker cells are dashes
   assert.match(body, /- \*\*Provider:\*\* Contabo/);
@@ -50,7 +60,7 @@ test("body from two run documents, one with failed probes", () => {
 test("an empty host issue has the header and no rows", () => {
   const body = renderBody(hostDoc([]), {});
   assert.equal(rows(body).length, 0);
-  assert.match(summaryTable([]), /^\| run \| when \| steal \| sysbench 1-thread events\/sec \| sysbench all-core events\/sec \| fio 4k read\/write IOPS \| fio CI 16k read\/write IOPS \| compile median \| Docker cold median \| Docker cached \|/);
+  assert.match(summaryTable([]), /^\| run \| when \| duration \| steal \| sysbench 1-thread events\/sec \| sysbench all-core events\/sec \| fio 4k read\/write IOPS \| fio CI 16k read\/write IOPS \| compile median \| Docker cold median \| Docker cached \|/);
   assert.deepEqual(parseBody(body).runs, []);
 });
 
