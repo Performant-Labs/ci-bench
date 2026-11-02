@@ -120,7 +120,15 @@ install_octokit() {
     return 0
   fi
   log "installing @octokit/rest $want"
-  sudo -n npm install --omit=dev --no-audit --no-fund --no-progress --prefix "$LIB_DIR" >/dev/null
+  # npm runs as the invoking user, so whichever node and npm that user has on PATH (apt, nvm, ...)
+  # are used: sudo resets PATH and would not find a user-installed npm. The package is pure
+  # JavaScript, so only the copy into place needs root.
+  local app="$TMP_DIR/app"
+  mkdir -p "$app"
+  cp "$LIB_DIR/package.json" "$app/package.json"
+  npm install --omit=dev --no-audit --no-fund --no-progress --prefix "$app" >/dev/null
+  sudo -n rm -rf "$LIB_DIR/node_modules"
+  sudo -n cp -r "$app/node_modules" "$app/package-lock.json" "$LIB_DIR/"
 }
 
 main() {

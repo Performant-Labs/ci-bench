@@ -39,4 +39,8 @@ CI_BENCH_OS_RELEASE="$work/os-fedora" PATH="$work/fake-bin:$PATH" bash "$root/in
 grep -q 'v1 supports Debian and Ubuntu only' "$work/o3" || fail "fedora: missing v1 message"
 [ "$(cat "$work/sudo.log")" = "$(printf -- '-n true\n-v')" ] || fail "fedora: sudo used before the OS check"
 [ ! -e "$work/violations.log" ] || fail "fedora: unexpected sudo calls"
+# 5. npm must never run under sudo: sudo resets PATH, so a user-installed npm (nvm, ~/.local) is not found.
+if grep -nE 'sudo[^#]*\bnpm\b' "$root/install.sh" | grep -v '^[0-9]*:[[:space:]]*#' | grep -q .; then
+  fail "install.sh runs npm under sudo; install as the user and copy into place"
+fi
 echo "installer exit paths: ok"
