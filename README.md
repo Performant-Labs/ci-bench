@@ -10,19 +10,14 @@ The benchmarks themselves stay upstream. This repo only installs them, runs them
 
 - Debian or Ubuntu. Other distros stop with an error; this is the v1 limit. Node 18 or newer is required, so Ubuntu 22.04 and Debian 11 (whose own `nodejs` is older) are not supported.
 - A user with `sudo`. The installer asks for the password once, up front, and keeps that sudo credential alive for the rest of the install. Later steps fail instead of prompting again.
-- A GitHub account with write access to this private repository. Results are kept as issues here, one per machine, and stay private.
-- A read-only token to download the installer, because the repository is private: a fine-grained personal access token with **Contents: read** on `Performant-Labs/ci-bench`. It is used only for the download and is never stored.
+- A GitHub account that can open issues in the repository that will hold the results.
 - A quiet machine. Stop other work on the host before you run.
 
 ## Quick start
 
 ```bash
 # 1. Install the commands, Node, the GitHub CLI and the Octokit client.
-#    The repository is private, so the download needs the read-only token. Unset it afterwards:
-#    it must not stand in for your real `gh` login (step 2), which needs permission to write issues.
-export GH_TOKEN=<read-only token>
-bash -c "$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://raw.githubusercontent.com/Performant-Labs/ci-bench/main/install.sh)"
-unset GH_TOKEN
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Performant-Labs/ci-bench/main/install.sh)"
 
 # 2. Log in to GitHub. ci-bench reads the token from `gh auth token`; it is never stored in an issue.
 gh auth login
@@ -59,7 +54,7 @@ Both `benchmark:init-run` and `benchmark:run` run preflight first and stop befor
 | `benchmark:run [--issue n] [-o file]` | Run the benchmarks. JSON goes to stdout, a short summary to stderr, `-o` also writes the JSON to a file. Exit 1 if any probe failed. |
 | `benchmark:compare a.json b.json [...]` | Print a side-by-side table of two or more result files. |
 
-Host issues go to this repository (`Performant-Labs/ci-bench`). Set `CI_BENCH_REPO=owner/name` to keep them in another repository, for example a fork.
+Host issues go to this repository (`Performant-Labs/ci-bench`) by default, and **this repository is public**: a host issue shows the hostname, kernel, CPU and the full run JSON to anyone. To keep results private, create a private repository with issues enabled and set `CI_BENCH_REPO=owner/name` before `benchmark:init-run`.
 
 ## What the numbers mean
 
