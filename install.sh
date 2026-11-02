@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 # ci-bench installer. Debian and Ubuntu only.
-#   export GH_TOKEN=<read-only token>
-#   bash -c "$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://raw.githubusercontent.com/Performant-Labs/ci-bench/main/install.sh)"
-#
-# The repository is private, so the files are fetched with a read token: GH_TOKEN or GITHUB_TOKEN,
-# or the login of an installed gh. A fine-grained token with Contents: read on this repo is enough.
-# The token is only used to download; it is never stored.
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Performant-Labs/ci-bench/main/install.sh)"
 #
 # Environment overrides (for testing and forks):
 #   CI_BENCH_SRC   local checkout to install from instead of downloading
@@ -62,22 +57,11 @@ apt_install() {
   sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
 }
 
-# The token goes into a private header file so it never appears in the process list.
-require_token() {
-  [ -z "${CI_BENCH_SRC:-}" ] || return 0
-  local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  if [ -z "$token" ] && command -v gh >/dev/null 2>&1; then
-    token="$(gh auth token 2>/dev/null || true)"
-  fi
-  [ -n "$token" ] || die "the repository is private. Set GH_TOKEN to a token with read access (fine-grained: Contents: read on Performant-Labs/ci-bench), or run gh auth login, then run the installer again."
-  ( umask 077; printf 'Authorization: Bearer %s\n' "$token" >"$TMP_DIR/auth" )
-}
-
 fetch() { # fetch <relative path> <dest>
   if [ -n "${CI_BENCH_SRC:-}" ]; then
     cp "${CI_BENCH_SRC}/$1" "$2"
   else
-    curl -fsSL -H "@$TMP_DIR/auth" "${RAW_BASE}/$1" -o "$2"
+    curl -fsSL "${RAW_BASE}/$1" -o "$2"
   fi
 }
 
@@ -141,7 +125,6 @@ install_octokit() {
 
 main() {
   detect_os
-  require_token
   sudo -n apt-get update -qq
   apt_install ca-certificates curl
   install_gh
